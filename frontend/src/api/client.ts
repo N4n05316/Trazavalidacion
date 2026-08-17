@@ -14,6 +14,23 @@ import type {
 } from "./types";
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8010";
+const TOKEN_KEY = "certus_token";
+
+// El backend vive en un dominio distinto al frontend en producción (GitHub
+// Pages + Render) — una cookie de sesión ahí queda clasificada "de terceros"
+// y muchos navegadores la bloquean por defecto. En vez de depender de eso,
+// el token se guarda acá y se reenvía explícitamente en cada request.
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+function setToken(token: string) {
+  localStorage.setItem(TOKEN_KEY, token);
+}
+
+function clearToken() {
+  localStorage.removeItem(TOKEN_KEY);
+}
 
 class ApiError extends Error {
   status: number;
@@ -23,10 +40,14 @@ class ApiError extends Error {
   }
 }
 
+function authHeaders(): Record<string, string> {
+  const token = getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     ...init,
   });
   if (!res.ok) {
@@ -81,7 +102,7 @@ export const api = {
   subirProduccion: async (archivo: File): Promise<IngestResult> => {
     const form = new FormData();
     form.append("archivo", archivo);
-    const res = await fetch(`${BASE_URL}/api/ingest/produccion`, { method: "POST", body: form, credentials: "include" });
+    const res = await fetch(`${BASE_URL}/api/ingest/produccion`, { method: "POST", body: form, headers: authHeaders() });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       throw new ApiError(res.status, body.detail ?? res.statusText);
@@ -92,7 +113,7 @@ export const api = {
   subirTrazabilidad: async (archivo: File): Promise<{ filas_nuevas: number }> => {
     const form = new FormData();
     form.append("archivo", archivo);
-    const res = await fetch(`${BASE_URL}/api/ingest/trazabilidad`, { method: "POST", body: form, credentials: "include" });
+    const res = await fetch(`${BASE_URL}/api/ingest/trazabilidad`, { method: "POST", body: form, headers: authHeaders() });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       throw new ApiError(res.status, body.detail ?? res.statusText);
@@ -102,10 +123,22 @@ export const api = {
 
   me: () => request<MeResponse>("/api/auth/me"),
 
-  login: (email: string, password: string) =>
-    request<{ ok: boolean }>("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+  login: async (email: string, password: string) => {
+    const res = await request<{ ok: boolean; token: string }>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+    setToken(res.token);
+    return res;
+  },
 
-  logout: () => request<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
+  logout: async () => {
+    try {
+      await request<{ ok: boolean }>("/api/auth/logout", { method: "POST" });
+    } finally {
+      clearToken();
+    }
+  },
 
   usuarios: () => request<Usuario[]>("/api/usuarios"),
 
@@ -116,12 +149,19 @@ export const api = {
     request<Usuario>(`/api/usuarios/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
 };
 
+function withToken(url: string): string {
+  const token = getToken();
+  if (!token) return url;
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}token=${encodeURIComponent(token)}`;
+}
+
 export function facsimilUrl(nDeclaracion: string): string {
-  return `${BASE_URL}/api/reportes/facsimil/${encodeURIComponent(nDeclaracion)}.pdf`;
+  return withToken(`${BASE_URL}/api/reportes/facsimil/${encodeURIComponent(nDeclaracion)}.pdf`);
 }
 
 export function exportarExcelUrl(): string {
-  return `${BASE_URL}/api/reportes/exportar.xlsx`;
+  return withToken(`${BASE_URL}/api/reportes/exportar.xlsx`);
 }
 
 export { ApiError };

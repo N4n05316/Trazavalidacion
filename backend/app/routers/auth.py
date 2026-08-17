@@ -1,11 +1,11 @@
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_user_optional, hash_password, require_admin, verify_password
+from app.auth import crear_token, get_current_user_optional, hash_password, require_admin, verify_password
 from app.config import settings
 from app.database import get_db
 from app.models import Usuario
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 @router.post("/login")
-def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
+def login(payload: LoginRequest, db: Session = Depends(get_db)):
     email = payload.email.strip().lower()
     usuario = db.execute(select(Usuario).where(Usuario.email == email)).scalar_one_or_none()
     if usuario is None or not usuario.activo or not verify_password(payload.password, usuario.password_hash):
@@ -24,13 +24,14 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
     usuario.ultimo_login = datetime.utcnow()
     db.commit()
 
-    request.session["user_id"] = str(usuario.id)
-    return {"ok": True}
+    return {"ok": True, "token": crear_token(usuario.id)}
 
 
 @router.post("/logout")
-def logout(request: Request):
-    request.session.clear()
+def logout():
+    # El token es stateless (JWT) — "cerrar sesión" es responsabilidad del
+    # cliente, que simplemente lo descarta. Se mantiene el endpoint por
+    # compatibilidad con el flujo del frontend.
     return {"ok": True}
 
 

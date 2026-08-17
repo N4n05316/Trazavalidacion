@@ -17,5 +17,3 @@ services:
         value: https://n4n05316.github.io
       - key: ALLOWED_EMAIL_DOMAIN
         value: friosur.cl
-      - key: SESSION_COOKIE_CROSS_SITE
-        value: "true"
