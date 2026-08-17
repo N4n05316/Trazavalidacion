@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { HashRouter, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { Layout } from "./components/Layout";
 import { CenterMessage } from "./components/CenterMessage";
@@ -39,10 +39,10 @@ function Gate() {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <AuthProvider>
         <Gate />
       </AuthProvider>
-    </BrowserRouter>
+    </HashRouter>
   );
 }

@@ -117,7 +117,7 @@ export function Dashboard() {
                 contentStyle={{ background: COLORS.panelAlt, border: `1px solid ${COLORS.line}`, borderRadius: 6, fontSize: 12 }}
                 labelStyle={{ color: COLORS.text }}
                 itemStyle={{ color: COLORS.brass }}
-                formatter={(v: number) => [`${v} ton`, "Trazado"]}
+                formatter={(v) => [`${v} ton`, "Trazado"]}
               />
               <Bar dataKey="ton" radius={[0, 3, 3, 0]} barSize={14}>
                 {chartData.map((_, i) => (
