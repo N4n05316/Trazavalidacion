@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: certus-backend
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        value: https://n4n05316.github.io
+      - key: ALLOWED_EMAIL_DOMAIN
+        value: friosur.cl
+      - key: SESSION_COOKIE_CROSS_SITE
+        value: "true"
