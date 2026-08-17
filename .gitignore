@@ -1,0 +1,15 @@
+# Herramienta / entorno local (no es parte del proyecto)
+.claude/
+
+# Material de referencia y datos de ejemplo (no se versionan — ver decisión del equipo)
+Codigo.gs
+certus-dashboard-live.jsx
+*.xls
+*.xlsx
+*.xlt
+*.xltx
+*.pdf
+
+# OS
+.DS_Store
+Thumbs.db
