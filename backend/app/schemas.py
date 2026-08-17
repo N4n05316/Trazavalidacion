@@ -124,6 +124,7 @@ class CruceLoteDiOut(BaseModel):
     estado_interno: str
     especies: list[str]
     barcos: list[str]
+    fecha: dt.date | None
 
 
 class IngestResult(BaseModel):

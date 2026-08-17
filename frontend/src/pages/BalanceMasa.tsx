@@ -1,25 +1,38 @@
 import { useState } from "react";
-import { FileText, RefreshCw, Scale } from "lucide-react";
+import { FileText, RefreshCw, Scale, Search } from "lucide-react";
 import { api, facsimilUrl } from "../api/client";
 import type { BalanceMasaFila } from "../api/types";
 import { CenterMessage } from "../components/CenterMessage";
 
 const TOL = 0.006;
 
+const PLACEHOLDER: Record<"di" | "lote" | "declaracion", string> = {
+  di: "N° de DI…",
+  lote: "N° de Lote…",
+  declaracion: "N° de Declaración…",
+};
+
 export function BalanceMasa() {
-  const [modo, setModo] = useState<"di" | "lote">("di");
+  const [modo, setModo] = useState<"di" | "lote" | "declaracion">("di");
   const [valor, setValor] = useState("");
   const [filas, setFilas] = useState<BalanceMasaFila[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [declFacsimil, setDeclFacsimil] = useState("");
+
+  const abrirFacsimil = () => {
+    if (!declFacsimil.trim()) return;
+    window.open(facsimilUrl(declFacsimil.trim()), "_blank", "noopener");
+  };
 
   const buscar = async () => {
     if (!valor.trim()) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await api.balanceMasa(modo === "di" ? { di: valor.trim() } : { lote: valor.trim() });
-      setFilas(res);
+      const params =
+        modo === "di" ? { di: valor.trim() } : modo === "lote" ? { lote: valor.trim() } : { n_declaracion: valor.trim() };
+      setFilas(await api.balanceMasa(params));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error desconocido");
     } finally {
@@ -50,13 +63,14 @@ export function BalanceMasa() {
       </p>
 
       <div className="field-row">
-        <select value={modo} onChange={(e) => setModo(e.target.value as "di" | "lote")}>
+        <select value={modo} onChange={(e) => setModo(e.target.value as "di" | "lote" | "declaracion")}>
           <option value="di">Buscar por DI</option>
           <option value="lote">Buscar por Lote</option>
+          <option value="declaracion">Buscar por N° Declaración</option>
         </select>
         <input
           type="text"
-          placeholder={modo === "di" ? "N° de DI…" : "N° de Lote…"}
+          placeholder={PLACEHOLDER[modo]}
           value={valor}
           onChange={(e) => setValor(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && buscar()}
@@ -65,13 +79,18 @@ export function BalanceMasa() {
           Buscar
         </button>
       </div>
+      {modo === "declaracion" && (
+        <p className="page-sub" style={{ marginTop: -8 }}>
+          Trae el balance del DI/Lote asociado a esa declaración — cada fila tiene su propio enlace al facsímil.
+        </p>
+      )}
 
       {loading && <CenterMessage icon={RefreshCw} title="Calculando balance…" />}
       {error && <CenterMessage icon={Scale} title="Error">{error}</CenterMessage>}
 
       {filas && filas.length === 0 && (
         <div className="panel" style={{ color: "var(--text-dim)", fontSize: 13 }}>
-          No se encontraron líneas para ese {modo === "di" ? "DI" : "lote"}.
+          No se encontraron líneas para {modo === "di" ? "ese DI" : modo === "lote" ? "ese lote" : "esa declaración"}.
         </div>
       )}
 
@@ -137,6 +156,28 @@ export function BalanceMasa() {
           </div>
         </div>
       )}
+
+      <div className="panel" style={{ marginTop: 16 }}>
+        <div className="page-heading" style={{ marginBottom: 4 }}>
+          <Search size={16} color="#c9974d" strokeWidth={1.8} />
+          <h2 style={{ fontSize: 14, margin: 0 }}>Acceso directo al facsímil</h2>
+        </div>
+        <p className="page-sub" style={{ marginTop: 0 }}>
+          Si ya conocés el N° de declaración, abrí su facsímil PDF directamente, sin pasar por el balance.
+        </p>
+        <div className="field-row">
+          <input
+            type="text"
+            placeholder="N° de Declaración…"
+            value={declFacsimil}
+            onChange={(e) => setDeclFacsimil(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && abrirFacsimil()}
+          />
+          <button className="btn" onClick={abrirFacsimil} disabled={!declFacsimil.trim()}>
+            <FileText size={13} /> Ver facsímil
+          </button>
+        </div>
+      </div>
     </>
   );
 }

@@ -80,10 +80,11 @@ export const api = {
       `/api/reportes/incumplimientos?solo_revisar=${soloRevisar}${lote ? `&lote=${encodeURIComponent(lote)}` : ""}`
     ),
 
-  balanceMasa: (params: { di?: string; lote?: string }) => {
+  balanceMasa: (params: { di?: string; lote?: string; n_declaracion?: string }) => {
     const qs = new URLSearchParams();
     if (params.di) qs.set("di", params.di);
     if (params.lote) qs.set("lote", params.lote);
+    if (params.n_declaracion) qs.set("n_declaracion", params.n_declaracion);
     return request<BalanceMasaFila[]>(`/api/reportes/balance-masa?${qs.toString()}`);
   },
 

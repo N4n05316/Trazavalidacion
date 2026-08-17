@@ -44,14 +44,16 @@ def resumen_ejecutivo(db: Session, top_especies: int = 7) -> dict:
     }
 
 
-def balance_masa(db: Session, di: str | None = None, lote: str | None = None) -> list[BalanceMasaOut]:
+def balance_masa(
+    db: Session, di: str | None = None, lote: str | None = None, n_declaracion: str | None = None
+) -> list[BalanceMasaOut]:
     """
-    Balance de masa por DI o por Lote (sección 7.2): para cada declaración
-    involucrada, cuánta materia prima entró vs. cuánto producto + desecho
-    salió — la misma comparación que hace el algoritmo de balance de
+    Balance de masa por DI, Lote o N° de Declaración (sección 7.2): para cada
+    declaración involucrada, cuánta materia prima entró vs. cuánto producto +
+    desecho salió — la misma comparación que hace el algoritmo de balance de
     toneladas (solve_partition), pero expuesta de forma transparente.
     """
-    if not di and not lote:
+    if not di and not lote and not n_declaracion:
         return []
 
     conditions = []
@@ -59,6 +61,8 @@ def balance_masa(db: Session, di: str | None = None, lote: str | None = None) ->
         conditions.append(Linea.di == di)
     if lote:
         conditions.append(Linea.lote == lote)
+    if n_declaracion:
+        conditions.append(Linea.n_declaracion == n_declaracion)
 
     rows = db.execute(select(Linea).where(or_(*conditions))).scalars().all()
 

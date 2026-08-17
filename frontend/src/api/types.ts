@@ -72,6 +72,7 @@ export interface CruceLoteDi {
   estado_interno: string;
   especies: string[];
   barcos: string[];
+  fecha: string | null;
 }
 
 export interface ResumenEjecutivo {

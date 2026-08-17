@@ -49,10 +49,11 @@ def reporte_incumplimientos(
 def reporte_balance_masa(
     di: str | None = Query(default=None),
     lote: str | None = Query(default=None),
+    n_declaracion: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
-    """Sección 7.2: balance de masa (materia prima vs. producto + desecho) por DI o Lote."""
-    return balance_masa(db, di=di, lote=lote)
+    """Sección 7.2: balance de masa (materia prima vs. producto + desecho) por DI, Lote o N° de Declaración."""
+    return balance_masa(db, di=di, lote=lote, n_declaracion=n_declaracion)
 
 
 @router.get("/declaraciones", response_model=list[ProductividadDiariaOut])
@@ -83,6 +84,7 @@ def reporte_cruce_lote_di(db: Session = Depends(get_db)):
             estado_interno=f.estado_interno,
             especies=f.especies,
             barcos=f.barcos,
+            fecha=f.fecha,
         )
         for f in filas
     ]

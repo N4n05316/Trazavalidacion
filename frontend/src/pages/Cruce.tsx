@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { GitCompare, RefreshCw } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { GitCompare, RefreshCw, Search } from "lucide-react";
 import { api } from "../api/client";
 import type { CruceLoteDi } from "../api/types";
 import { CenterMessage } from "../components/CenterMessage";
@@ -9,12 +9,22 @@ const ESTADO_CLASS: Record<string, string> = {
   "OK - coincide": "pill--ok",
 };
 
+function fmtFecha(f: string | null): string {
+  if (!f) return "—";
+  const [y, m, d] = f.split("-");
+  return `${d}-${m}-${y}`;
+}
+
 export function Cruce() {
   const [filas, setFilas] = useState<CruceLoteDi[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [soloDiscrepancias, setSoloDiscrepancias] = useState(false);
   const [estadoInterno, setEstadoInterno] = useState<string>("todos");
+  const [busqueda, setBusqueda] = useState("");
+  const [resaltado, setResaltado] = useState<string | null>(null);
+  const [busquedaError, setBusquedaError] = useState(false);
+  const filaRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
 
   const load = async () => {
     setLoading(true);
@@ -47,6 +57,22 @@ export function Cruce() {
       (estadoInterno === "todos" || f.estado_interno === estadoInterno)
   );
 
+  const irABusqueda = () => {
+    const q = busqueda.trim();
+    if (!q) return;
+    const match = visibles.find(
+      (f) => f.lote === q || f.di_externo.includes(q) || f.di_resuelto.includes(q)
+    );
+    if (!match) {
+      setBusquedaError(true);
+      setResaltado(null);
+      return;
+    }
+    setBusquedaError(false);
+    setResaltado(match.lote);
+    filaRefs.current[match.lote]?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+
   return (
     <>
       <div className="page-heading">
@@ -55,7 +81,7 @@ export function Cruce() {
       </div>
       <p className="page-sub">
         Compara el registro interno de la planta, el lote digitado en Sernapesca, y el DI resuelto por el
-        algoritmo de balance de toneladas.
+        algoritmo de balance de toneladas. Ordenado del lote más reciente al más antiguo.
       </p>
 
       <div className="field-row">
@@ -75,11 +101,33 @@ export function Cruce() {
         </button>
       </div>
 
+      <div className="field-row">
+        <input
+          type="text"
+          placeholder="Ir a un Lote o DI…"
+          value={busqueda}
+          onChange={(e) => {
+            setBusqueda(e.target.value);
+            setBusquedaError(false);
+          }}
+          onKeyDown={(e) => e.key === "Enter" && irABusqueda()}
+        />
+        <button className="btn" onClick={irABusqueda} disabled={!busqueda.trim()}>
+          <Search size={13} /> Ir
+        </button>
+        {busquedaError && (
+          <span style={{ color: "var(--warn)", fontSize: 13 }}>
+            No se encontró ese Lote/DI (con los filtros actuales).
+          </span>
+        )}
+      </div>
+
       <div className="panel">
         <div className="data-table-wrap">
           <table className="data-table">
             <thead>
               <tr>
+                <th>Fecha</th>
                 <th>Lote</th>
                 <th>DI externo (interno)</th>
                 <th>DI resuelto (Sernapesca)</th>
@@ -91,7 +139,14 @@ export function Cruce() {
             </thead>
             <tbody>
               {visibles.map((f) => (
-                <tr key={f.lote}>
+                <tr
+                  key={f.lote}
+                  ref={(el) => {
+                    filaRefs.current[f.lote] = el;
+                  }}
+                  style={resaltado === f.lote ? { outline: "2px solid var(--brass)", outlineOffset: -2 } : undefined}
+                >
+                  <td className="dim">{fmtFecha(f.fecha)}</td>
                   <td className="mono">{f.lote}</td>
                   <td className="mono">{f.di_externo.join(", ") || "—"}</td>
                   <td className="mono">{f.di_resuelto.join(", ") || "—"}</td>

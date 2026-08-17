@@ -8,19 +8,13 @@ original, donde la hoja se sh.clear()-ea y reescribe entera cada vez).
 """
 from __future__ import annotations
 
+import datetime as dt
 from dataclasses import dataclass, field
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Linea, MateriaPrimaExterna, TipoLinea
-
-_ORDEN_ESTADO = {
-    "DISCREPANCIA - revisar": 0,
-    "Aún no procesado en Sernapesca": 1,
-    "Sin dato en registro interno": 2,
-    "OK - coincide": 3,
-}
 
 
 @dataclass
@@ -32,21 +26,24 @@ class CruceRow:
     estado_interno: str = ""
     especies: list[str] = field(default_factory=list)
     barcos: list[str] = field(default_factory=list)
+    fecha: dt.date | None = None  # fecha de declaración más reciente entre las líneas de este lote
 
 
 def calcular_cruce_lote_di(db: Session) -> list[CruceRow]:
     resueltos: dict[str, dict] = {}
     rows = db.execute(
-        select(Linea.lote, Linea.estado, Linea.di, Linea.especie).where(
+        select(Linea.lote, Linea.estado, Linea.di, Linea.especie, Linea.fecha_declaracion).where(
             Linea.tipo_linea.in_([TipoLinea.PRODUCTO.value, TipoLinea.DESECHO.value])
         )
     ).all()
-    for lote, estado, di, especie in rows:
+    for lote, estado, di, especie, fecha_declaracion in rows:
         lote = str(lote)
-        entry = resueltos.setdefault(lote, {"estado": estado, "dis": set(), "especies": set()})
+        entry = resueltos.setdefault(lote, {"estado": estado, "dis": set(), "especies": set(), "fecha": None})
         entry["estado"] = estado
         entry["dis"].add(str(di))
         entry["especies"].add(especie)
+        if fecha_declaracion and (entry["fecha"] is None or fecha_declaracion > entry["fecha"]):
+            entry["fecha"] = fecha_declaracion
 
     externos: dict[str, dict] = {}
     ext_rows = db.execute(
@@ -81,8 +78,11 @@ def calcular_cruce_lote_di(db: Session) -> list[CruceRow]:
                 estado_interno=res["estado"] if res else "",
                 especies=sorted(res["especies"]) if res else [],
                 barcos=sorted(ext["barcos"]) if ext else [],
+                fecha=res["fecha"] if res else None,
             )
         )
 
-    filas.sort(key=lambda f: (_ORDEN_ESTADO.get(f.estado_cruce, 99), f.lote))
+    # Más reciente primero; los lotes sin fecha resuelta (aún no procesados en
+    # Sernapesca) quedan al final, ya que no hay con qué ubicarlos en el tiempo.
+    filas.sort(key=lambda f: (f.fecha or dt.date.min, f.lote), reverse=True)
     return filas
