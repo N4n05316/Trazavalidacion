@@ -48,19 +48,22 @@ def _materia_html(fila) -> str:
     return "<br/>".join(partes) if partes else "—"
 
 
-def _fila_lote_resuelto(fila) -> str:
-    """El lote dominante ya calculado para esta fila (mismo para todos sus bullets de materia)."""
-    for b in fila.materia:
-        if b.lote_resuelto:
-            return b.lote_resuelto
-    return ""
+def _fila_lotes_esperados(fila) -> set[str]:
+    """
+    Los lotes esperados válidos para esta fila. Puede haber más de uno: cuando
+    una fila mezcla materia por DI directo con materia de producción propia
+    trazada a OTRO DI, cada origen tiene su propio lote correcto — comparar
+    contra uno solo marcaría como error un producto que en realidad calza con
+    el otro origen.
+    """
+    return {b.lote_resuelto for b in fila.materia if b.lote_resuelto}
 
 
 def _producto_html(fila) -> str:
-    lote_esperado = _fila_lote_resuelto(fila)
+    lotes_esperados = _fila_lotes_esperados(fila)
     partes = []
     for p in fila.producto:
-        discrepa = bool(lote_esperado and p.lote and p.lote != lote_esperado)
+        discrepa = bool(lotes_esperados and p.lote and p.lote not in lotes_esperados)
         lote_html = f'<font color="#c1594c"><b>{p.lote}</b></font>' if discrepa else f"<b>{p.lote or '(sin lote)'}</b>"
         partes.append(
             f"• <b>{p.codigo}</b>: {p.nombre_corto}<br/>"

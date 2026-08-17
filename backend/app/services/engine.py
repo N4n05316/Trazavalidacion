@@ -144,9 +144,24 @@ def build_lote_events(rows: list[RawRow]) -> tuple[list[LineaResultado], list[Si
     unresolved: list[SinDeterminarItem] = []
 
     for ndecl, items in by_decl.items():
+        # Mapa lote -> especie de la materia de producción propia que lo
+        # consume. Existe porque el catálogo de Sernapesca a veces usa un
+        # nombre de especie distinto para el producto entero intermedio y
+        # para el producto final del mismo pez (ej. "COJINOBA DEL SUR" para
+        # el código 40400 vs "COJINOBA DEL SUR O AZUL" para el código 46059
+        # que se elabora a partir de él) — sin esto, el producto final queda
+        # agrupado con el DI de una especie completamente ajena en la misma
+        # declaración y termina atribuido a un DI equivocado.
+        lote_a_especie_propia: dict[str, str] = {
+            x.lote: x.species for x in items if x.matprod == "Mat.Prima" and x.tipo_origen == "PLA" and x.lote
+        }
+
         by_species: dict[str, list[RawRow]] = {}
         for x in items:
-            by_species.setdefault(x.species, []).append(x)
+            especie_grupo = x.species
+            if x.matprod == "Producción" and x.lote in lote_a_especie_propia:
+                especie_grupo = lote_a_especie_propia[x.lote]
+            by_species.setdefault(especie_grupo, []).append(x)
 
         for species, srows in by_species.items():
             raw_di_events = [x for x in srows if x.matprod == "Mat.Prima" and x.tipo_origen == "DI"]

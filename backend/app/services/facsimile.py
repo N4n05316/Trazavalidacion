@@ -109,12 +109,37 @@ def _materia_bullet_di(lc: LineaCruda, lote_resuelto: str = "") -> MateriaBullet
     )
 
 
-def _materia_bullet_propia(lc: LineaCruda) -> MateriaBullet:
+def _materia_bullet_propia(lc: LineaCruda, di_origen: str, lote_resuelto: str) -> MateriaBullet:
+    etiqueta = f"Producción Propia — Declaración origen {lc.declaracion_origen}"
+    if di_origen:
+        etiqueta += f" — DI {di_origen}"
     return MateriaBullet(
-        codigo=lc.codigo_producto,
-        especie=lc.especie,
-        etiqueta=f"Producción Propia — Declaración origen {lc.declaracion_origen}",
-        ton=lc.toneladas,
+        codigo=lc.codigo_producto, especie=lc.especie, etiqueta=etiqueta,
+        ton=lc.toneladas, lote_resuelto=lote_resuelto,
+    )
+
+
+def _di_via_declaracion_origen(db: Session, n_declaracion_origen: str, lote: str) -> str:
+    """
+    Para materia prima de producción propia: el folio de origen (ej. 8601948)
+    no es un DI, sino otra declaración que ya transformó un DI en el producto
+    que acá se consume como materia prima. Se recupera el DI real consultando
+    `lineas` (tabla ya resuelta) por esa declaración + ese lote — misma fuente
+    que usa el resto del sistema — para poder mostrar y validar el lote
+    esperado igual que si la materia viniera directamente de un DI.
+    """
+    if not n_declaracion_origen or not lote:
+        return ""
+    return (
+        db.execute(
+            select(Linea.di).where(
+                Linea.n_declaracion == n_declaracion_origen,
+                Linea.lote == lote,
+                Linea.tipo_linea.in_([TipoLinea.PRODUCTO.value, TipoLinea.DESECHO.value]),
+                Linea.di != "",
+            ).limit(1)
+        ).scalar_one_or_none()
+        or ""
     )
 
 
@@ -146,11 +171,38 @@ def build_facsimile(db: Session, n_declaracion: str) -> DeclaracionFacsimile | N
     fecha_declaracion = rows[0].fecha_declaracion
 
     dis_presentes = {r.declaracion_origen for r in rows if r.matprod == "Mat.Prima" and r.tipo_origen == "DI"}
+
+    # Traza cada materia de producción propia hasta el DI real que la originó
+    # (vía la declaración de origen), para poder resaltarla igual que las
+    # materias por DI directo — ver docstring de _di_via_declaracion_origen.
+    propia_di: dict[tuple[str, str], str] = {}
+    for r in rows:
+        if r.matprod == "Mat.Prima" and r.tipo_origen == "PLA":
+            key = (r.declaracion_origen, r.lote)
+            if key not in propia_di:
+                di = _di_via_declaracion_origen(db, r.declaracion_origen, r.lote)
+                propia_di[key] = di
+                if di:
+                    dis_presentes.add(di)
+
     lote_esperado = _lote_esperado_por_di(db, dis_presentes)
+
+    # Igual que en build_lote_events (engine.py): un producto cuyo lote
+    # coincide con el de una materia de producción propia se agrupa con ESA
+    # materia, aunque el catálogo de Sernapesca le dé un nombre de especie
+    # distinto (mismo pez, código de producto entero intermedio vs código de
+    # producto final) — evita que quede mezclado con el DI de una especie
+    # ajena.
+    lote_a_especie_propia: dict[str, str] = {
+        r.lote: r.especie for r in rows if r.matprod == "Mat.Prima" and r.tipo_origen == "PLA" and r.lote
+    }
 
     by_species: dict[str, list[LineaCruda]] = {}
     for r in rows:
-        by_species.setdefault(r.especie, []).append(r)
+        especie_grupo = r.especie
+        if r.matprod == "Producción" and r.lote in lote_a_especie_propia:
+            especie_grupo = lote_a_especie_propia[r.lote]
+        by_species.setdefault(especie_grupo, []).append(r)
 
     filas: list[FilaFacsimile] = []
 
@@ -167,7 +219,8 @@ def build_facsimile(db: Session, n_declaracion: str) -> DeclaracionFacsimile | N
             for r in di_raw:
                 fila.materia.append(_materia_bullet_di(r, lote_esperado.get(r.declaracion_origen, "")))
             for r in propia_raw:
-                fila.materia.append(_materia_bullet_propia(r))
+                di_o = propia_di.get((r.declaracion_origen, r.lote), "")
+                fila.materia.append(_materia_bullet_propia(r, di_o, lote_esperado.get(di_o, "")))
             for r in out_raw:
                 fila.producto.append(_producto_item(r))
             if fila.materia or fila.producto:
