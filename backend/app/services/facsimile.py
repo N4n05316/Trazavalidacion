@@ -214,14 +214,21 @@ def build_facsimile(db: Session, n_declaracion: str) -> DeclaracionFacsimile | N
 
         if propia_raw:
             # Especie con producción propia (con o sin DI también) — no se separa,
-            # ver docstring del módulo.
+            # ver docstring del módulo. A diferencia de `out_raw` (que excluye
+            # los productos que solo continúan el lote ya consumido, para no
+            # contarlos dos veces en el calce por balance de toneladas), acá
+            # se muestran TODOS los productos digitados para esta especie —
+            # el facsímil debe reflejar "así se declaró" incluso para esas
+            # líneas de paso, que no participan en ningún solve_partition en
+            # esta rama.
+            out_raw_todos = [r for r in srows if r.matprod == "Producción"]
             fila = FilaFacsimile()
             for r in di_raw:
                 fila.materia.append(_materia_bullet_di(r, lote_esperado.get(r.declaracion_origen, "")))
             for r in propia_raw:
                 di_o = propia_di.get((r.declaracion_origen, r.lote), "")
                 fila.materia.append(_materia_bullet_propia(r, di_o, lote_esperado.get(di_o, "")))
-            for r in out_raw:
+            for r in out_raw_todos:
                 fila.producto.append(_producto_item(r))
             if fila.materia or fila.producto:
                 filas.append(fila)
